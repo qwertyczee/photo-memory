@@ -1,0 +1,19 @@
+{
+    "build": {
+        "production": {},
+        "development": {
+            "developmentClient": true,
+            "ios": {
+                "buildConfiguration": "Debug"
+            }
+        },
+        "apk_build": {
+            "android": {
+                "buildType": "apk"
+            }
+        }
+    },
+    "submit": {
+        "production": {}
+    }
+}
