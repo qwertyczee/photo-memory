@@ -69,6 +69,7 @@ export default function PhotoDisplay({ photo, loading, error, onNext, onPrevious
   }
 
   if (error) {
+    console.log(error)
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>{error}</Text>

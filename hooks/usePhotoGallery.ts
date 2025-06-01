@@ -17,6 +17,7 @@ export function usePhotoGallery() {
   const [photoHistory, setPhotoHistory] = useState<Photo[]>([]);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState<number>(0);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [remainingPhotos, setRemainingPhotos] = useState<Photo[]>([]);
 
   useEffect(() => {
     async function getPermissions() {
@@ -43,28 +44,35 @@ export function usePhotoGallery() {
   async function loadPhotos() {
     try {
       if (Platform.OS === 'web') {
-        const demoPhotos = getDemoPhotos();
-        setPhotos(demoPhotos);
-        const initialPhoto = demoPhotos[Math.floor(Math.random() * demoPhotos.length)];
-        setPhotoHistory([initialPhoto]);
-        setCurrentPhotoIndex(0);
+        setError('Web platform is not supported');
         setLoading(false);
         return;
       }
 
-      const assets = await MediaLibrary.getAssetsAsync({
-        mediaType: 'photo',
-        first: 100,
-        sortBy: [MediaLibrary.SortBy.creationTime],
-      });
+      // Načítáme všechny fotky z galerie
+      let allAssets: MediaLibrary.Asset[] = [];
+      let hasNextPage = true;
+      let after;
 
-      if (assets.assets.length === 0) {
+      while (hasNextPage) {
+        const assets = await MediaLibrary.getAssetsAsync({
+          mediaType: 'photo',
+          first: 1000, // Načítáme po dávkách
+          after: after,
+        });
+
+        allAssets = [...allAssets, ...assets.assets];
+        hasNextPage = assets.hasNextPage;
+        after = assets.endCursor;
+      }
+
+      if (allAssets.length === 0) {
         setError('No photos found in your gallery');
         setLoading(false);
         return;
       }
 
-      const mappedPhotos = assets.assets.map(asset => ({
+      const mappedPhotos = allAssets.map(asset => ({
         id: asset.id,
         uri: asset.uri,
         creationTime: asset.creationTime,
@@ -73,9 +81,21 @@ export function usePhotoGallery() {
       }));
 
       setPhotos(mappedPhotos);
-      const initialPhoto = mappedPhotos[Math.floor(Math.random() * mappedPhotos.length)];
+      setRemainingPhotos([...mappedPhotos]);
+      
+      // Vybereme náhodnou první fotku
+      const randomIndex = Math.floor(Math.random() * mappedPhotos.length);
+      const initialPhoto = mappedPhotos[randomIndex];
+      
       setPhotoHistory([initialPhoto]);
       setCurrentPhotoIndex(0);
+      
+      // Odebereme první fotku ze zbývajících
+      const updatedRemaining = mappedPhotos.filter(
+        photo => photo.id !== initialPhoto.id
+      );
+      setRemainingPhotos(updatedRemaining);
+      
       setLoading(false);
     } catch (err) {
       setError('Failed to load photos');
@@ -86,16 +106,27 @@ export function usePhotoGallery() {
   function showNextRandomPhoto() {
     if (photos.length === 0) return;
     
-    let newPhoto: Photo;
-    do {
-      newPhoto = photos[Math.floor(Math.random() * photos.length)];
-    } while (
-      photoHistory.length > 0 &&
-      newPhoto.id === photoHistory[photoHistory.length - 1].id
-    );
-
+    let photosToChooseFrom = remainingPhotos;
+    
+    // Pokud už nejsou žádné zbývající fotky, resetujeme seznam
+    if (remainingPhotos.length === 0) {
+      photosToChooseFrom = [...photos];
+      setRemainingPhotos([...photos]);
+    }
+    
+    // Vybereme náhodnou fotku ze zbývajících
+    const randomIndex = Math.floor(Math.random() * photosToChooseFrom.length);
+    const newPhoto = photosToChooseFrom[randomIndex];
+    
+    // Přidáme fotku do historie
     setPhotoHistory(prev => [...prev, newPhoto]);
     setCurrentPhotoIndex(prev => prev + 1);
+    
+    // Odebereme fotku ze zbývajících
+    const updatedRemaining = photosToChooseFrom.filter(
+      photo => photo.id !== newPhoto.id
+    );
+    setRemainingPhotos(updatedRemaining);
   }
 
   function showPreviousPhoto() {
@@ -107,32 +138,6 @@ export function usePhotoGallery() {
   const canShowPrevious = currentPhotoIndex > 0;
   const currentPhoto = photoHistory[currentPhotoIndex];
 
-  function getDemoPhotos(): Photo[] {
-    return [
-      {
-        id: '1',
-        uri: 'https://images.pexels.com/photos/2486168/pexels-photo-2486168.jpeg',
-        creationTime: new Date('2023-01-15').getTime(),
-        width: 1200,
-        height: 800,
-      },
-      {
-        id: '2',
-        uri: 'https://images.pexels.com/photos/1591382/pexels-photo-1591382.jpeg',
-        creationTime: new Date('2023-02-22').getTime(),
-        width: 1200,
-        height: 800,
-      },
-      {
-        id: '3',
-        uri: 'https://images.pexels.com/photos/1292115/pexels-photo-1292115.jpeg',
-        creationTime: new Date('2023-03-10').getTime(),
-        width: 1200,
-        height: 800,
-      },
-    ];
-  }
-
   return {
     loading,
     error,
@@ -141,5 +146,7 @@ export function usePhotoGallery() {
     showNextRandomPhoto,
     showPreviousPhoto,
     hasPermission,
+    totalPhotos: photos.length,
+    remainingPhotosCount: remainingPhotos.length,
   };
 }
