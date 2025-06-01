@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, Image, StyleSheet, Dimensions, ActivityIndicator, TouchableOpacity, Platform } from 'react-native';
 import { Photo } from '@/hooks/usePhotoGallery';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing, withSequence, withDelay } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing, withDelay } from 'react-native-reanimated';
 import { RefreshCcw, ArrowLeft } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 
@@ -14,9 +14,10 @@ type PhotoDisplayProps = {
   onNext: () => void;
   onPrevious: () => void;
   canShowPrevious: boolean;
+  onRetry: () => void;
 };
 
-export default function PhotoDisplay({ photo, loading, error, onNext, onPrevious, canShowPrevious }: PhotoDisplayProps) {
+export default function PhotoDisplay({ photo, loading, error, onNext, onPrevious, canShowPrevious, onRetry }: PhotoDisplayProps) {
   const opacity = useSharedValue(0);
   const scale = useSharedValue(1.05);
   const dateOpacity = useSharedValue(0);
@@ -69,11 +70,10 @@ export default function PhotoDisplay({ photo, loading, error, onNext, onPrevious
   }
 
   if (error) {
-    console.log(error)
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.refreshButton} onPress={onNext}>
+        <TouchableOpacity style={styles.refreshButton} onPress={onRetry}>
           <Text style={styles.refreshButtonText}>Try Again</Text>
         </TouchableOpacity>
       </View>
@@ -83,7 +83,10 @@ export default function PhotoDisplay({ photo, loading, error, onNext, onPrevious
   if (!photo) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>No photos found</Text>
+        <Text style={styles.errorText}>No photo to display.</Text>
+        <TouchableOpacity style={styles.refreshButton} onPress={onRetry}>
+          <Text style={styles.refreshButtonText}>Refresh</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -230,9 +233,9 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   previousButton: {
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    // backgroundColor: 'rgba(0, 0, 0, 0.6)', // Už je v iconButton
   },
   nextButton: {
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    // backgroundColor: 'rgba(0, 0, 0, 0.6)', // Už je v iconButton
   },
 });

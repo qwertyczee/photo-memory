@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, SafeAreaView } from 'react-native';
+import { SafeAreaView, StyleSheet } from 'react-native';
 import { usePhotoGallery } from '@/hooks/usePhotoGallery';
 import PhotoDisplay from '@/components/PhotoDisplay';
 import { StatusBar } from 'expo-status-bar';
@@ -12,6 +12,7 @@ export default function MemoryScreen() {
     canShowPrevious,
     showNextRandomPhoto,
     showPreviousPhoto,
+    refresh,
   } = usePhotoGallery();
 
   return (
@@ -24,6 +25,7 @@ export default function MemoryScreen() {
         onNext={showNextRandomPhoto}
         onPrevious={showPreviousPhoto}
         canShowPrevious={canShowPrevious}
+        onRetry={refresh}
       />
     </SafeAreaView>
   );
