@@ -13,11 +13,11 @@ export type Photo = {
 export function usePhotoGallery() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [totalPhotosCount, setTotalPhotosCount] = useState<number>(0);
   const [photoHistory, setPhotoHistory] = useState<Photo[]>([]);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState<number>(0);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
-  const [remainingPhotos, setRemainingPhotos] = useState<Photo[]>([]);
+  const [usedIndices, setUsedIndices] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     async function getPermissions() {
@@ -27,7 +27,7 @@ export function usePhotoGallery() {
         setHasPermission(status === 'granted');
         
         if (status === 'granted') {
-          await loadPhotos();
+          await loadPhotosCount();
         } else {
           setError('Permission to access media library was denied');
           setLoading(false);
@@ -41,7 +41,7 @@ export function usePhotoGallery() {
     getPermissions();
   }, []);
 
-  async function loadPhotos() {
+  async function loadPhotosCount() {
     try {
       if (Platform.OS === 'web') {
         setError('Web platform is not supported');
@@ -49,84 +49,103 @@ export function usePhotoGallery() {
         return;
       }
 
-      // Načítáme všechny fotky z galerie
-      let allAssets: MediaLibrary.Asset[] = [];
-      let hasNextPage = true;
-      let after;
+      // Zjistíme jen celkový počet fotek
+      const assets = await MediaLibrary.getAssetsAsync({
+        mediaType: 'photo',
+        first: 1, // Načteme jen jednu pro zjištění celkového počtu
+      });
 
-      while (hasNextPage) {
-        const assets = await MediaLibrary.getAssetsAsync({
-          mediaType: 'photo',
-          first: 1000, // Načítáme po dávkách
-          after: after,
-        });
-
-        allAssets = [...allAssets, ...assets.assets];
-        hasNextPage = assets.hasNextPage;
-        after = assets.endCursor;
-      }
-
-      if (allAssets.length === 0) {
+      if (assets.totalCount === 0) {
         setError('No photos found in your gallery');
         setLoading(false);
         return;
       }
 
-      const mappedPhotos = allAssets.map(asset => ({
-        id: asset.id,
-        uri: asset.uri,
-        creationTime: asset.creationTime,
-        width: asset.width,
-        height: asset.height,
-      }));
-
-      setPhotos(mappedPhotos);
-      setRemainingPhotos([...mappedPhotos]);
+      setTotalPhotosCount(assets.totalCount);
       
-      // Vybereme náhodnou první fotku
-      const randomIndex = Math.floor(Math.random() * mappedPhotos.length);
-      const initialPhoto = mappedPhotos[randomIndex];
-      
-      setPhotoHistory([initialPhoto]);
-      setCurrentPhotoIndex(0);
-      
-      // Odebereme první fotku ze zbývajících
-      const updatedRemaining = mappedPhotos.filter(
-        photo => photo.id !== initialPhoto.id
-      );
-      setRemainingPhotos(updatedRemaining);
+      // Načteme první náhodnou fotku
+      await loadRandomPhoto(true);
       
       setLoading(false);
     } catch (err) {
-      setError('Failed to load photos');
+      setError('Failed to load photos count');
       setLoading(false);
     }
   }
 
-  function showNextRandomPhoto() {
-    if (photos.length === 0) return;
-    
-    let photosToChooseFrom = remainingPhotos;
-    
-    // Pokud už nejsou žádné zbývající fotky, resetujeme seznam
-    if (remainingPhotos.length === 0) {
-      photosToChooseFrom = [...photos];
-      setRemainingPhotos([...photos]);
+  async function loadRandomPhoto(isInitial = false) {
+    try {
+      if (totalPhotosCount === 0) return;
+      
+      let randomIndex: number;
+      let attempts = 0;
+      const maxAttempts = 100; // Zabránění nekonečné smyčky
+      
+      // Pokud už jsme použili všechny indexy, resetujeme
+      if (usedIndices.size >= totalPhotosCount) {
+        setUsedIndices(new Set());
+      }
+      
+      // Najdeme náhodný index, který jsme ještě nepoužili
+      do {
+        randomIndex = Math.floor(Math.random() * totalPhotosCount);
+        attempts++;
+      } while (usedIndices.has(randomIndex) && attempts < maxAttempts);
+      
+      // Načteme konkrétní fotku podle indexu
+      const assets = await MediaLibrary.getAssetsAsync({
+        mediaType: 'photo',
+        first: 1,
+        after: randomIndex > 0 ? `${randomIndex - 1}` : undefined,
+      });
+      
+      if (assets.assets.length === 0) {
+        // Fallback - načteme fotku podle přesného indexu jinak
+        const fallbackAssets = await MediaLibrary.getAssetsAsync({
+          mediaType: 'photo',
+          first: randomIndex + 1,
+        });
+        
+        if (fallbackAssets.assets.length > randomIndex) {
+          const asset = fallbackAssets.assets[randomIndex];
+          const photo = mapAssetToPhoto(asset);
+          handlePhotoLoaded(photo, randomIndex, isInitial);
+        }
+      } else {
+        const asset = assets.assets[0];
+        const photo = mapAssetToPhoto(asset);
+        handlePhotoLoaded(photo, randomIndex, isInitial);
+      }
+    } catch (err) {
+      setError('Failed to load random photo');
     }
+  }
+
+  function mapAssetToPhoto(asset: MediaLibrary.Asset): Photo {
+    return {
+      id: asset.id,
+      uri: asset.uri,
+      creationTime: asset.creationTime,
+      width: asset.width,
+      height: asset.height,
+    };
+  }
+
+  function handlePhotoLoaded(photo: Photo, index: number, isInitial: boolean) {
+    setUsedIndices(prev => new Set([...prev, index]));
     
-    // Vybereme náhodnou fotku ze zbývajících
-    const randomIndex = Math.floor(Math.random() * photosToChooseFrom.length);
-    const newPhoto = photosToChooseFrom[randomIndex];
-    
-    // Přidáme fotku do historie
-    setPhotoHistory(prev => [...prev, newPhoto]);
-    setCurrentPhotoIndex(prev => prev + 1);
-    
-    // Odebereme fotku ze zbývajících
-    const updatedRemaining = photosToChooseFrom.filter(
-      photo => photo.id !== newPhoto.id
-    );
-    setRemainingPhotos(updatedRemaining);
+    if (isInitial) {
+      setPhotoHistory([photo]);
+      setCurrentPhotoIndex(0);
+    } else {
+      setPhotoHistory(prev => [...prev, photo]);
+      setCurrentPhotoIndex(prev => prev + 1);
+    }
+  }
+
+  function showNextRandomPhoto() {
+    if (totalPhotosCount === 0) return;
+    loadRandomPhoto();
   }
 
   function showPreviousPhoto() {
@@ -146,7 +165,7 @@ export function usePhotoGallery() {
     showNextRandomPhoto,
     showPreviousPhoto,
     hasPermission,
-    totalPhotos: photos.length,
-    remainingPhotosCount: remainingPhotos.length,
+    totalPhotos: totalPhotosCount,
+    remainingPhotosCount: totalPhotosCount - usedIndices.size,
   };
 }
