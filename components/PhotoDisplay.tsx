@@ -9,7 +9,7 @@ const { width, height } = Dimensions.get('window');
 
 type PhotoDisplayProps = {
   photo: Photo | null;
-  loading: boolean; // Tento prop teď bude konzistentně řídit spinner
+  loading: boolean;
   error: string | null;
   onNext: () => void;
   onPrevious: () => void;
@@ -23,8 +23,7 @@ export default function PhotoDisplay({ photo, loading, error, onNext, onPrevious
   const buttonOpacity = useSharedValue(0);
 
   useEffect(() => {
-    // Spouštíme animace pouze když je fotka a není načítání
-    if (photo && !loading) { // Klíčové je !loading
+    if (photo && !loading) {
       opacity.value = 0;
       scale.value = 1.05;
       dateOpacity.value = 0;
@@ -35,14 +34,7 @@ export default function PhotoDisplay({ photo, loading, error, onNext, onPrevious
       dateOpacity.value = withDelay(600, withTiming(1, { duration: 600 }));
       buttonOpacity.value = withDelay(800, withTiming(1, { duration: 400 }));
     }
-    // Reset animací, pokud se začne načítat nová fotka (abychom neanimovali starou)
-    if (loading) {
-      opacity.value = 0;
-      scale.value = 1.05;
-      dateOpacity.value = 0;
-      buttonOpacity.value = 0;
-    }
-  }, [photo, loading]); // Důležité závislosti
+  }, [photo, loading]);
 
   const imageAnimatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -67,8 +59,7 @@ export default function PhotoDisplay({ photo, loading, error, onNext, onPrevious
     });
   };
 
-  // Zobrazit spinner, pokud se něco načítá
-  if (loading && !photo) { // Spinner jen pokud je loading a ještě není žádná fotka (např. při startu nebo načítání první)
+  if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -76,26 +67,9 @@ export default function PhotoDisplay({ photo, loading, error, onNext, onPrevious
       </View>
     );
   }
-  // Pokud se načítá nová fotka (po onNext) a stará je ještě vidět, nemusíme zobrazovat přes celý displej
-  // Lze přidat ActivityIndicator na obrázek nebo do tlačítek
-  if (loading && photo) { // Pokud se načítá, ale nějaká fotka už je zobrazená
-    return (
-      <View style={styles.container}>
-        <Animated.View style={[styles.imageContainer, imageAnimatedStyle]}>
-          <Image 
-            source={{ uri: photo.uri }} 
-            style={styles.image} 
-            resizeMode="cover"
-          />
-        </Animated.View>
-        <ActivityIndicator size="large" color="#FFF" style={styles.overlaySpinner} />
-      </View>
-    );
-  }
-
 
   if (error) {
-    console.log("PhotoDisplay Error:", error) // Lepší logování chyby
+    console.log(error)
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>{error}</Text>
@@ -106,13 +80,10 @@ export default function PhotoDisplay({ photo, loading, error, onNext, onPrevious
     );
   }
 
-  if (!photo) { // Když není chyba ani loading, ale fotka chybí
+  if (!photo) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>No photos found or an unknown issue occurred.</Text>
-        <TouchableOpacity style={styles.refreshButton} onPress={onNext}>
-          <Text style={styles.refreshButtonText}>Refresh</Text>
-        </TouchableOpacity>
+        <Text style={styles.errorText}>No photos found</Text>
       </View>
     );
   }
@@ -145,7 +116,6 @@ export default function PhotoDisplay({ photo, loading, error, onNext, onPrevious
             style={[styles.iconButton, styles.previousButton]} 
             onPress={onPrevious}
             activeOpacity={0.7}
-            disabled={loading} // Zakázat tlačítka při načítání
           >
             <ArrowLeft size={24} color="#ffffff" />
           </TouchableOpacity>
@@ -154,7 +124,6 @@ export default function PhotoDisplay({ photo, loading, error, onNext, onPrevious
           style={[styles.iconButton, styles.nextButton]} 
           onPress={onNext}
           activeOpacity={0.7}
-          disabled={loading} // Zakázat tlačítka při načítání
         >
           <RefreshCcw size={24} color="#ffffff" />
         </TouchableOpacity>
@@ -200,7 +169,7 @@ const styles = StyleSheet.create({
   dateText: {
     color: '#ffffff',
     fontSize: 18,
-    // fontFamily: 'Inter-Medium', // Ujistěte se, že máte načtené fonty
+    fontFamily: 'Inter-Medium',
     textAlign: 'center',
   },
   loadingContainer: {
@@ -213,7 +182,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#333333',
-    // fontFamily: 'Inter-Regular',
+    fontFamily: 'Inter-Regular',
   },
   errorContainer: {
     flex: 1,
@@ -227,7 +196,7 @@ const styles = StyleSheet.create({
     color: '#333333',
     textAlign: 'center',
     marginBottom: 20,
-    // fontFamily: 'Inter-Regular',
+    fontFamily: 'Inter-Regular',
   },
   refreshButton: {
     backgroundColor: '#007AFF',
@@ -238,7 +207,7 @@ const styles = StyleSheet.create({
   refreshButtonText: {
     color: '#ffffff',
     fontSize: 16,
-    // fontFamily: 'Inter-Medium',
+    fontFamily: 'Inter-Medium',
   },
   buttonContainer: {
     position: 'absolute',
@@ -265,11 +234,5 @@ const styles = StyleSheet.create({
   },
   nextButton: {
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
-  },
-  overlaySpinner: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: [{ translateX: -20 }, { translateY: -20 }], // Centrování
   },
 });
